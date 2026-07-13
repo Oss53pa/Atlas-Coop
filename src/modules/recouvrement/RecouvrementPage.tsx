@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   HandCoins, Plus, RefreshCw, Send, CheckCircle2, CalendarClock,
-  AlertTriangle, Users, Layers, Info,
+  AlertTriangle, Users, Layers, Info, ShieldAlert, Calculator,
 } from 'lucide-react';
 import { useCoopQuery, useCoopMutation, supabase } from '../../hooks/data';
 import {
@@ -11,7 +11,7 @@ import {
 } from '../../ui';
 import { formatDate } from '../../lib/format';
 
-type Onglet = 'creances' | 'balance' | 'plans';
+type Onglet = 'creances' | 'balance' | 'plans' | 'provisions';
 
 interface Creance {
   id: string; debiteur_type: string; membre_id: string | null; client_id: string | null;
@@ -27,6 +27,14 @@ interface Plan {
   id: string; debiteur_nom: string; reference: string | null; montant_total_xof: number;
   nb_echeances: number; echeances_payees: number; mensualite_xof: number;
   prochaine_echeance: string | null; taux_respect_bp: number; statut: string; signed_at: string | null;
+}
+interface PreviewProvision {
+  creance_id: string; debiteur_nom: string; reste_xof: number; jours_retard: number;
+  taux_bp: number; provision_xof: number;
+}
+interface CampagneProvision {
+  id: string; date_provision: string; nb_creances_provisionnees: number;
+  provision_precedente_xof: number; provision_totale_xof: number; variation_xof: number;
 }
 
 const ORIGINE_LABEL: Record<string, string> = {
@@ -44,17 +52,22 @@ export function RecouvrementPage() {
   const [nouveauPlan, setNouveauPlan] = useState(false);
 
   const { data, isLoading, refetch } = useCoopQuery(['recouvrement'], async (coopId) => {
-    const [creances, balance, plans] = await Promise.all([
+    const [creances, balance, plans, preview, campagnes] = await Promise.all([
       supabase.from('coop_creances').select('*').eq('cooperative_id', coopId)
         .in('statut', ['ouverte', 'partiel']).order('echeance', { ascending: true }),
       supabase.rpc('coop_balance_agee', { p_coop: coopId }),
       supabase.from('coop_plans_recouvrement').select('*').eq('cooperative_id', coopId)
         .order('created_at', { ascending: false }),
+      supabase.rpc('coop_previsualiser_provisions', { p_coop: coopId }),
+      supabase.from('coop_provisions_creances').select('*').eq('cooperative_id', coopId)
+        .order('date_provision', { ascending: false }).order('created_at', { ascending: false }).limit(12),
     ]);
     return {
       creances: (creances.data ?? []) as Creance[],
       balance: (balance.data ?? []) as LigneAgee[],
       plans: (plans.data ?? []) as Plan[],
+      preview: (preview.data ?? []) as PreviewProvision[],
+      campagnes: (campagnes.data ?? []) as CampagneProvision[],
     };
   });
 
@@ -73,6 +86,23 @@ export function RecouvrementPage() {
       return n as number;
     },
     { invalidate: ['recouvrement'], onSuccess: (n) => push('success', n > 0 ? `${n} créance(s) générée(s)` : 'Aucune nouvelle créance') },
+  );
+
+  const provisionActuelle = data?.campagnes?.[0]?.provision_totale_xof ?? 0;
+  const provisionCible = (data?.preview ?? []).reduce((s, p) => s + p.provision_xof, 0);
+
+  const provisionner = useCoopMutation(
+    async (coopId) => {
+      const { data: r, error } = await supabase.rpc('coop_provisionner_creances', { p_coop: coopId });
+      if (error) throw error;
+      return r as { variation_xof: number; provision_totale_xof: number };
+    },
+    {
+      invalidate: ['recouvrement'],
+      onSuccess: (r) => push('success', r.variation_xof === 0
+        ? 'Provision déjà à jour, aucune écriture'
+        : `${r.variation_xof > 0 ? 'Dotation' : 'Reprise'} comptabilisée : provision totale ${r.provision_totale_xof.toLocaleString('fr-FR')} FCFA`),
+    },
   );
 
   return (
@@ -112,6 +142,7 @@ export function RecouvrementPage() {
               { key: 'creances', label: 'Créances', count: creances.length },
               { key: 'balance', label: 'Balance âgée', count: data?.balance.length },
               { key: 'plans', label: 'Plans de règlement', count: data?.plans.length },
+              { key: 'provisions', label: 'Provisions', count: (data?.preview ?? []).filter((p) => p.provision_xof > 0).length },
             ]}
           />
 
@@ -203,6 +234,79 @@ export function RecouvrementPage() {
                             <Td className="text-texte-2">{p.echeances_payees}/{p.nb_echeances}</Td>
                             <Td className="text-texte-2">{p.prochaine_echeance ? formatDate(p.prochaine_echeance) : '—'}</Td>
                             <Td><Badge tone={p.statut === 'solde' || p.statut === 'respecte' ? 'action' : p.statut === 'rompu' || p.statut === 'en_retard' ? 'alerte' : 'or'} dot>{p.statut}</Badge></Td>
+                          </Tr>
+                        ))}
+                      </TBody>
+                    </Table>
+                  </CardBody>
+                </Card>
+              )}
+            </>
+          )}
+
+          {onglet === 'provisions' && (
+            <>
+              <div className="mb-4 flex items-start gap-2 rounded-xl border border-or-fcfa/25 bg-or-fcfa/5 p-3 text-sm text-texte-2">
+                <Info className="mt-0.5 h-4 w-4 shrink-0 text-or-fcfa" />
+                Dépréciation SYSCOHADA des créances douteuses (compte 491). Taux suggéré par ancienneté — 0 % jusqu'à 90 j, 25 % à 91–180 j, 50 % à 181–360 j, 100 % au-delà — ajustable créance par créance. « Comptabiliser » génère la dotation (6817/491) ou la reprise (491/787) correspondant à l'écart avec la dernière campagne.
+              </div>
+
+              <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <Stat label="Provision comptabilisée" value={<Money value={provisionActuelle} suffix={false} size="xl" />} tone="primaire" icon={<ShieldAlert className="h-4 w-4" />} hint={data?.campagnes?.[0] ? `au ${formatDate(data.campagnes[0].date_provision)}` : 'aucune campagne'} />
+                <Stat label="Provision cible (aujourd'hui)" value={<Money value={provisionCible} suffix={false} size="xl" />} tone="or" icon={<Calculator className="h-4 w-4" />} hint={`${(data?.preview ?? []).filter((p) => p.provision_xof > 0).length} créance(s) concernée(s)`} />
+                <Stat
+                  label="Écart à comptabiliser"
+                  value={<Money value={provisionCible - provisionActuelle} suffix={false} size="xl" sign colorNegative />}
+                  tone={provisionCible - provisionActuelle === 0 ? 'primaire' : provisionCible - provisionActuelle > 0 ? 'alerte' : 'action'}
+                  icon={<AlertTriangle className="h-4 w-4" />}
+                  hint={provisionCible - provisionActuelle > 0 ? 'dotation à passer' : provisionCible - provisionActuelle < 0 ? 'reprise à passer' : 'à jour'}
+                />
+              </div>
+
+              <div className="mb-3 flex justify-end">
+                <Button variant="action" size="sm" loading={provisionner.isPending} disabled={provisionCible - provisionActuelle === 0} onClick={() => provisionner.mutate(undefined)}>
+                  <Calculator className="h-4 w-4" /> Comptabiliser
+                </Button>
+              </div>
+
+              {(data?.preview ?? []).filter((p) => p.provision_xof > 0).length === 0 ? (
+                <EmptyState icon={<ShieldAlert className="h-8 w-8" />} title="Aucune créance à provisionner" description="Aucune créance ouverte n'a franchi le seuil de 90 jours de retard." />
+              ) : (
+                <Card className="mb-6">
+                  <CardHeader title="Détail par créance" subtitle="Taux suggéré selon l'ancienneté (ou taux manuel si déjà fixé)" />
+                  <CardBody className="p-0">
+                    <Table>
+                      <THead><Th>Débiteur</Th><Th align="right">Reste dû</Th><Th>Retard</Th><Th align="right">Taux</Th><Th align="right">Provision</Th></THead>
+                      <TBody>
+                        {(data!.preview).filter((p) => p.provision_xof > 0).map((p) => (
+                          <Tr key={p.creance_id}>
+                            <Td className="font-medium text-texte">{p.debiteur_nom}</Td>
+                            <Td align="right"><Money value={p.reste_xof} size="sm" suffix={false} /></Td>
+                            <Td className="text-texte-2">{p.jours_retard} j</Td>
+                            <Td align="right" className="text-texte-2">{(p.taux_bp / 100).toLocaleString('fr-FR')} %</Td>
+                            <Td align="right"><Money value={p.provision_xof} size="sm" suffix={false} /></Td>
+                          </Tr>
+                        ))}
+                      </TBody>
+                    </Table>
+                  </CardBody>
+                </Card>
+              )}
+
+              {(data?.campagnes.length ?? 0) > 0 && (
+                <Card>
+                  <CardHeader title="Historique des campagnes" subtitle="Dotations et reprises comptabilisées" />
+                  <CardBody className="p-0">
+                    <Table>
+                      <THead><Th>Date</Th><Th align="right">Créances</Th><Th align="right">Provision précédente</Th><Th align="right">Variation</Th><Th align="right">Provision totale</Th></THead>
+                      <TBody>
+                        {data!.campagnes.map((c) => (
+                          <Tr key={c.id}>
+                            <Td className="text-texte-2">{formatDate(c.date_provision)}</Td>
+                            <Td align="right" className="text-texte-2">{c.nb_creances_provisionnees}</Td>
+                            <Td align="right"><Money value={c.provision_precedente_xof} size="sm" suffix={false} /></Td>
+                            <Td align="right"><Money value={c.variation_xof} size="sm" suffix={false} sign colorNegative /></Td>
+                            <Td align="right"><Money value={c.provision_totale_xof} size="sm" suffix={false} /></Td>
                           </Tr>
                         ))}
                       </TBody>
