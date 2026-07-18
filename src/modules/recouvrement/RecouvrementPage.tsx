@@ -330,19 +330,41 @@ export function RecouvrementPage() {
 function ReglerModal({ creance, onClose, onDone }: { creance: Creance; onClose: () => void; onDone: () => void }) {
   const { push } = useToast();
   const [montant, setMontant] = useState(String(creance.reste_xof));
+  const [mode, setMode] = useState('espece');
+
+  const { data: treso } = useCoopQuery(['recouvrement-treso'], async (coopId) => {
+    const [caisses, banques] = await Promise.all([
+      supabase.from('coop_caisses').select('id, libelle').eq('cooperative_id', coopId).order('code'),
+      supabase.from('coop_comptes_bancaires').select('id, banque').eq('cooperative_id', coopId).order('banque'),
+    ]);
+    return {
+      caisses: (caisses.data ?? []) as { id: string; libelle: string }[],
+      banques: (banques.data ?? []) as { id: string; banque: string }[],
+    };
+  });
+  const [compte, setCompte] = useState('');
+  const caisses = treso?.caisses ?? [];
+  const banques = treso?.banques ?? [];
+  const effectiveCompte = compte || (caisses[0] ? `caisse:${caisses[0].id}` : banques[0] ? `banque:${banques[0].id}` : '');
+
   const regler = useCoopMutation(
     async () => {
       const m = Math.round(Number(montant) || 0);
       if (m <= 0) throw new Error('Montant invalide');
       if (m > creance.reste_xof) throw new Error('Montant supérieur au reste dû');
-      const { error } = await supabase.rpc('coop_regler_creance', { p_creance: creance.id, p_montant: m });
+      if (!effectiveCompte) throw new Error('Aucune caisse ni compte bancaire — créez-en un dans Trésorerie');
+      const [kind, id] = effectiveCompte.split(':');
+      const { error } = await supabase.rpc('coop_encaisser_creance', {
+        p_creance: creance.id, p_montant: m, p_mode: mode,
+        p_caisse_id: kind === 'caisse' ? id : null, p_compte_bancaire_id: kind === 'banque' ? id : null,
+      });
       if (error) throw error;
     },
-    { invalidate: ['recouvrement'], onSuccess: onDone },
+    { invalidate: ['recouvrement', 'tresorerie', 'dashboard'], onSuccess: onDone },
   );
   return (
     <Modal open onClose={onClose} title={`Régler — ${creance.debiteur_nom}`}
-      footer={<><Button variant="outline" onClick={onClose}>Annuler</Button><Button variant="action" loading={regler.isPending} onClick={() => regler.mutateAsync(undefined).catch((e) => push('error', (e as Error).message))}>Encaisser</Button></>}>
+      footer={<><Button variant="outline" onClick={onClose}>Annuler</Button><Button variant="action" loading={regler.isPending} disabled={!effectiveCompte} onClick={() => regler.mutateAsync(undefined).catch((e) => push('error', (e as Error).message))}>Encaisser</Button></>}>
       <div className="space-y-4">
         <div className="rounded-xl border border-ligne bg-fond p-3 text-sm">
           <div className="flex justify-between"><span className="text-texte-2">Montant</span><Money value={creance.montant_xof} size="sm" /></div>
@@ -352,6 +374,26 @@ function ReglerModal({ creance, onClose, onDone }: { creance: Creance; onClose: 
         <Field label="Montant encaissé (FCFA)">
           <Input type="number" value={montant} onChange={(e) => setMontant(e.target.value)} min={1} max={creance.reste_xof} />
         </Field>
+        {!effectiveCompte ? (
+          <p className="text-sm text-alerte">Aucune caisse ni compte bancaire configuré. Créez-en un dans « Trésorerie » avant d'encaisser.</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Encaissé sur">
+              <Select value={effectiveCompte} onChange={(e) => setCompte(e.target.value)}>
+                {caisses.length > 0 && <optgroup label="Caisses">{caisses.map((c) => <option key={c.id} value={`caisse:${c.id}`}>{c.libelle}</option>)}</optgroup>}
+                {banques.length > 0 && <optgroup label="Banques">{banques.map((b) => <option key={b.id} value={`banque:${b.id}`}>{b.banque}</option>)}</optgroup>}
+              </Select>
+            </Field>
+            <Field label="Mode">
+              <Select value={mode} onChange={(e) => setMode(e.target.value)}>
+                <option value="espece">Espèces</option>
+                <option value="mobile_money">Mobile Money</option>
+                <option value="virement">Virement</option>
+                <option value="cheque">Chèque</option>
+              </Select>
+            </Field>
+          </div>
+        )}
       </div>
     </Modal>
   );
