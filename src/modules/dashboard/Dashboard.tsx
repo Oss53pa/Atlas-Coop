@@ -1,21 +1,26 @@
 import { Link } from 'react-router-dom';
 import {
-  Users, Scale, ArrowUpRight, Sparkles, Blocks,
-  ShieldCheck, BadgeCheck, CalendarDays, FileCheck2, Bot, MessageSquare,
+  Users, Scale, ArrowUpRight, Sparkles, Blocks, ArrowRight,
+  ShieldCheck, BadgeCheck, CalendarDays, FileCheck2, Bot, MessageSquare, LogOut,
 } from 'lucide-react';
 import { useCoopQuery, supabase } from '../../hooks/data';
 import { useCoop } from '../../auth/CooperativeProvider';
 import { useAuth } from '../../auth/AuthProvider';
-import { Card, CardHeader, CardBody, Money, Spinner, EmptyState, Sparkline } from '../../ui';
+import { Card, CardHeader, CardBody, Money, Spinner, EmptyState, Sparkline, Avatar } from '../../ui';
 import { formatDateTime, formatNumber } from '../../lib/format';
 import { natureLabel } from '../../domain/labels';
 
 const MOIS = new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
 const MOIS_MAJ = MOIS.charAt(0).toUpperCase() + MOIS.slice(1);
 
+/**
+ * Cockpit d'accueil — écran AUTONOME affiché juste après connexion, AVANT
+ * l'application (pas de menu latéral). L'utilisateur y entre dans son espace
+ * via le bouton « Entrer dans l'application » (ou un raccourci ci-dessous).
+ */
 export function Dashboard() {
   const { current } = useCoop();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const prenom = ((user?.user_metadata?.full_name as string) ?? user?.email ?? '').split(/[ @]/)[0];
 
   const { data, isLoading } = useCoopQuery(['dashboard'], async (coopId) => {
@@ -50,7 +55,20 @@ export function Dashboard() {
   if (isLoading || !data) return <Spinner label="Chargement du cockpit…" />;
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
+      {/* ===== EN-TÊTE MINIMAL (pas de menu — écran d'accueil avant l'application) ===== */}
+      <div className="flex items-center justify-between">
+        <span className="font-display text-2xl text-primaire">Atlas Coop</span>
+        <button
+          onClick={signOut}
+          className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium text-texte-2 hover:bg-surface-2 hover:text-texte"
+        >
+          <Avatar name={(user?.user_metadata?.full_name as string) ?? user?.email} size="sm" />
+          <span className="hidden sm:inline">Se déconnecter</span>
+          <LogOut className="h-4 w-4" />
+        </button>
+      </div>
+
       {/* ===== HERO ===== */}
       <section className="hero-atlas relative overflow-hidden rounded-3xl text-white">
         <div className="hero-dots absolute inset-0" />
@@ -81,6 +99,14 @@ export function Dashboard() {
               la <b className="text-white/90">ristourne</b>, en conformité <b className="text-white/90">OHADA · SYSCOHADA</b>.
               Données 100 % en temps réel.
             </p>
+            <div className="mt-6 flex justify-center">
+              <Link
+                to="/membres"
+                className="inline-flex items-center gap-2 rounded-xl bg-action px-6 py-3 text-sm font-bold text-white shadow-carte-hover transition-colors hover:bg-action-hover"
+              >
+                Entrer dans l'application <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
           </div>
         </div>
       </section>

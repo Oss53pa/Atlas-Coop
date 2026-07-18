@@ -1,8 +1,9 @@
 import {
-  LayoutDashboard, Users, Coins, Wallet, Landmark, BookText, Banknote,
+  Users, Coins, Wallet, Landmark, BookText, Banknote,
   Scale, Fish, Beef, Sprout, ShoppingCart, Store, Factory, Boxes,
   Tractor, PiggyBank, Building2, Receipt, Bot, MessageSquare, Blocks,
   Network, ScrollText, PieChart, HandCoins, Smartphone,
+  Layers, Workflow, Leaf, LayoutGrid, Settings,
   type LucideIcon,
 } from 'lucide-react';
 import type { CoopRole } from '../domain/database.types';
@@ -17,18 +18,14 @@ export interface NavItem {
 }
 export interface NavGroup {
   title: string;
+  icon: LucideIcon;
   items: NavItem[];
 }
 
 export const NAV: NavGroup[] = [
   {
-    title: 'Pilotage',
-    items: [
-      { to: '/', label: 'Cockpit', icon: LayoutDashboard, module: 'M21', phase: 1 },
-    ],
-  },
-  {
     title: 'Noyau · Registre',
+    icon: Layers,
     items: [
       { to: '/membres', label: 'Sociétariat', icon: Users, module: 'M1', phase: 1 },
       { to: '/capital', label: 'Capital & parts', icon: Coins, module: 'M2', phase: 1 },
@@ -41,6 +38,7 @@ export const NAV: NavGroup[] = [
   },
   {
     title: 'Chaîne de valeur',
+    icon: Workflow,
     items: [
       { to: '/collecte', label: 'Collecte terrain', icon: Scale, module: 'M7', phase: 1 },
       { to: '/campagnes', label: 'Campagnes', icon: Sprout, module: 'M15', phase: 2 },
@@ -54,6 +52,7 @@ export const NAV: NavGroup[] = [
   },
   {
     title: 'Sections d\'activité',
+    icon: Leaf,
     items: [
       { to: '/peche', label: 'Pêche & aquaculture', icon: Fish, module: 'M8', phase: 2 },
       { to: '/elevage', label: 'Élevage, aviculture, lait', icon: Beef, module: 'M9', phase: 2 },
@@ -62,6 +61,7 @@ export const NAV: NavGroup[] = [
   },
   {
     title: 'Transversaux',
+    icon: LayoutGrid,
     items: [
       { to: '/canal-membre', label: 'Canal membre (SMS)', icon: MessageSquare, module: 'M16', phase: 1 },
       { to: '/decaissements', label: 'Décaissements Mobile Money', icon: Smartphone, module: 'M16', phase: 3, roles: ['admin', 'gerant', 'comptable'] },
@@ -75,6 +75,7 @@ export const NAV: NavGroup[] = [
   },
   {
     title: 'Configuration',
+    icon: Settings,
     items: [
       { to: '/sections', label: 'Sections (framework A1)', icon: Blocks, module: 'A1', phase: 1, roles: ['admin', 'gerant'] },
     ],

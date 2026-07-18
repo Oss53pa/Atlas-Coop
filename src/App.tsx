@@ -74,8 +74,10 @@ export default function App() {
 
   return (
     <Routes>
+      {/* Cockpit d'accueil — AVANT l'application, sans menu. C'est de là qu'on y entre. */}
+      <Route path="/" element={<Dashboard />} />
+
       <Route element={<AppShell />}>
-        <Route path="/" element={<Dashboard />} />
         <Route path="/membres" element={<MembresPage />} />
         <Route path="/membres/:id" element={<MembreDetail />} />
         <Route path="/sections" element={<SectionsPage />} />
@@ -108,7 +110,7 @@ export default function App() {
         <Route path="/reseau" element={<ReseauPage />} />
         <Route path="/veille" element={<VeillePage />} />
 
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/membres" replace />} />
       </Route>
     </Routes>
   );

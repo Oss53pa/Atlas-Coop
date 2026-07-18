@@ -1,35 +1,166 @@
-import { useState, Suspense } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { ChevronDown, LogOut, Menu, X, Check, Building2 } from 'lucide-react';
+import { ChevronDown, ChevronsLeft, ChevronsRight, LogOut, Menu, X, Check, Building2 } from 'lucide-react';
 import { NAV } from './navigation';
 import { useAuth } from '../auth/AuthProvider';
 import { useCoop } from '../auth/CooperativeProvider';
 import { Avatar, Spinner } from '../ui';
 import { cn } from '../lib/cn';
 
+const PANEL_PREF_KEY = 'atlas-coop-sidebar-panel-open';
+
+/** Groupe contenant l'item dont la route correspond au chemin courant. */
+function groupForPath(pathname: string): string | undefined {
+  return NAV.find((g) =>
+    g.items.some((it) => pathname === it.to || pathname.startsWith(it.to + '/')),
+  )?.title;
+}
+
 export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(() => localStorage.getItem(PANEL_PREF_KEY) !== 'ferme');
   const location = useLocation();
   const { hasRole } = useCoop();
+  const [selectedGroup, setSelectedGroup] = useState(() => groupForPath(location.pathname) ?? NAV[0]?.title);
+
+  useEffect(() => {
+    const g = groupForPath(location.pathname);
+    if (g) setSelectedGroup(g);
+  }, [location.pathname]);
+
+  const togglePanel = () => {
+    setPanelOpen((v) => {
+      const next = !v;
+      localStorage.setItem(PANEL_PREF_KEY, next ? 'ouvert' : 'ferme');
+      return next;
+    });
+  };
+
+  const groups = NAV.map((g) => ({ ...g, items: g.items.filter((it) => !it.roles || hasRole(...it.roles)) }))
+    .filter((g) => g.items.length > 0);
+  const activeGroup = groups.find((g) => g.title === selectedGroup) ?? groups[0];
 
   return (
     <div className="flex min-h-screen bg-fond">
-      {/* Sidebar desktop */}
-      <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col border-r border-ligne bg-surface lg:flex">
-        <SidebarContent />
+      {/* Sidebar desktop — rail d'icônes + panneau rétractable */}
+      <aside
+        className={cn(
+          'fixed inset-y-0 left-0 z-20 hidden lg:flex',
+          panelOpen ? 'w-[19rem]' : 'w-16',
+        )}
+      >
+        {/* Rail — toujours visible, un icône par groupe */}
+        <div className="flex w-16 shrink-0 flex-col items-center gap-1 border-r border-ligne bg-surface py-4">
+          <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-primaire/10 font-display text-xl text-primaire">
+            A
+          </div>
+          {groups.map((g) => (
+            <button
+              key={g.title}
+              onClick={() => { setSelectedGroup(g.title); if (!panelOpen) togglePanel(); }}
+              title={g.title}
+              className={cn(
+                'flex h-10 w-10 items-center justify-center rounded-xl transition-colors',
+                activeGroup?.title === g.title
+                  ? 'bg-primaire/10 text-primaire'
+                  : 'text-texte-2 hover:bg-surface-2 hover:text-texte',
+              )}
+            >
+              <g.icon className="h-5 w-5" />
+            </button>
+          ))}
+          <div className="flex-1" />
+          <button
+            onClick={togglePanel}
+            title={panelOpen ? 'Réduire le menu' : 'Étendre le menu'}
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-texte-2 hover:bg-surface-2 hover:text-texte"
+          >
+            {panelOpen ? <ChevronsLeft className="h-4 w-4" /> : <ChevronsRight className="h-4 w-4" />}
+          </button>
+        </div>
+
+        {/* Panneau — items du groupe sélectionné, masquable */}
+        {panelOpen && (
+          <div className="flex w-[15rem] shrink-0 flex-col border-r border-ligne bg-surface">
+            <div className="flex h-16 items-center gap-2 border-b border-ligne px-5">
+              <span className="font-display text-2xl text-primaire">Atlas Coop</span>
+            </div>
+            <nav className="flex-1 overflow-y-auto px-3 py-4">
+              <div className="mb-1.5 px-2 text-xs font-semibold uppercase tracking-wider text-texte-2">
+                {activeGroup?.title}
+              </div>
+              {activeGroup?.items.map((it) => (
+                <NavLink
+                  key={it.to}
+                  to={it.to}
+                  className={({ isActive }) =>
+                    cn(
+                      'group flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors',
+                      isActive
+                        ? 'bg-primaire/10 text-primaire'
+                        : 'text-texte-2 hover:bg-surface-2 hover:text-texte',
+                    )
+                  }
+                >
+                  <it.icon className="h-[18px] w-[18px] shrink-0" />
+                  <span className="flex-1 truncate">{it.label}</span>
+                  {it.phase && it.phase > 1 && (
+                    <span className="rounded bg-desactive-fond px-1 text-[10px] text-texte-2">
+                      P{it.phase}
+                    </span>
+                  )}
+                </NavLink>
+              ))}
+            </nav>
+          </div>
+        )}
       </aside>
 
-      {/* Sidebar mobile */}
+      {/* Sidebar mobile — liste complète, comme avant */}
       {mobileOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-primaire/40 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 flex w-64 flex-col border-r border-ligne bg-surface">
-            <SidebarContent onNavigate={() => setMobileOpen(false)} />
+          <aside className="absolute inset-y-0 left-0 flex w-72 flex-col border-r border-ligne bg-surface">
+            <div className="flex h-16 items-center gap-2 border-b border-ligne px-5">
+              <span className="font-display text-2xl text-primaire">Atlas Coop</span>
+            </div>
+            <nav className="flex-1 overflow-y-auto px-3 py-4">
+              {groups.map((g) => (
+                <div key={g.title} className="mb-5">
+                  <div className="mb-1.5 flex items-center gap-1.5 px-2 text-xs font-semibold uppercase tracking-wider text-texte-2">
+                    <g.icon className="h-3.5 w-3.5" /> {g.title}
+                  </div>
+                  {g.items.map((it) => (
+                    <NavLink
+                      key={it.to}
+                      to={it.to}
+                      onClick={() => setMobileOpen(false)}
+                      className={({ isActive }) =>
+                        cn(
+                          'group flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors',
+                          isActive
+                            ? 'bg-primaire/10 text-primaire'
+                            : 'text-texte-2 hover:bg-surface-2 hover:text-texte',
+                        )
+                      }
+                    >
+                      <it.icon className="h-[18px] w-[18px] shrink-0" />
+                      <span className="flex-1 truncate">{it.label}</span>
+                      {it.phase && it.phase > 1 && (
+                        <span className="rounded bg-desactive-fond px-1 text-[10px] text-texte-2">
+                          P{it.phase}
+                        </span>
+                      )}
+                    </NavLink>
+                  ))}
+                </div>
+              ))}
+            </nav>
           </aside>
         </div>
       )}
 
-      <div className="flex flex-1 flex-col lg:pl-64">
+      <div className={cn('flex flex-1 flex-col transition-[padding] duration-150', panelOpen ? 'lg:pl-[19rem]' : 'lg:pl-16')}>
         <Topbar onMenu={() => setMobileOpen((v) => !v)} mobileOpen={mobileOpen} />
         <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
           <div key={location.pathname} className="mx-auto max-w-7xl animate-fade-in">
@@ -41,53 +172,6 @@ export function AppShell() {
       </div>
     </div>
   );
-
-  function SidebarContent({ onNavigate }: { onNavigate?: () => void } = {}) {
-    return (
-      <>
-        <div className="flex h-16 items-center gap-2 border-b border-ligne px-5">
-          <span className="font-display text-2xl text-primaire">Atlas Coop</span>
-        </div>
-        <nav className="flex-1 overflow-y-auto px-3 py-4">
-          {NAV.map((group) => {
-            const items = group.items.filter((it) => !it.roles || hasRole(...it.roles));
-            if (!items.length) return null;
-            return (
-              <div key={group.title} className="mb-5">
-                <div className="mb-1.5 px-2 text-xs font-semibold uppercase tracking-wider text-texte-2">
-                  {group.title}
-                </div>
-                {items.map((it) => (
-                  <NavLink
-                    key={it.to}
-                    to={it.to}
-                    end={it.to === '/'}
-                    onClick={onNavigate}
-                    className={({ isActive }) =>
-                      cn(
-                        'group flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors',
-                        isActive
-                          ? 'bg-primaire/10 text-primaire'
-                          : 'text-texte-2 hover:bg-surface-2 hover:text-texte',
-                      )
-                    }
-                  >
-                    <it.icon className="h-[18px] w-[18px] shrink-0" />
-                    <span className="flex-1 truncate">{it.label}</span>
-                    {it.phase && it.phase > 1 && (
-                      <span className="rounded bg-desactive-fond px-1 text-[10px] text-texte-2">
-                        P{it.phase}
-                      </span>
-                    )}
-                  </NavLink>
-                ))}
-              </div>
-            );
-          })}
-        </nav>
-      </>
-    );
-  }
 }
 
 function Topbar({ onMenu, mobileOpen }: { onMenu: () => void; mobileOpen: boolean }) {

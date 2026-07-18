@@ -70,14 +70,41 @@ export function Onboarding() {
           <div className="grid grid-cols-2 gap-4">
             <Field label="Pays">
               <Select value={pays} onChange={(e) => setPays(e.target.value)}>
-                <option value="CI">Côte d'Ivoire</option>
-                <option value="SN">Sénégal</option>
-                <option value="BF">Burkina Faso</option>
-                <option value="ML">Mali</option>
-                <option value="BJ">Bénin</option>
-                <option value="TG">Togo</option>
-                <option value="CM">Cameroun</option>
-                <option value="NE">Niger</option>
+                <optgroup label="UEMOA (zone XOF)">
+                  <option value="BJ">Bénin</option>
+                  <option value="BF">Burkina Faso</option>
+                  <option value="CI">Côte d'Ivoire</option>
+                  <option value="GW">Guinée-Bissau</option>
+                  <option value="ML">Mali</option>
+                  <option value="NE">Niger</option>
+                  <option value="SN">Sénégal</option>
+                  <option value="TG">Togo</option>
+                </optgroup>
+                <optgroup label="CEMAC (zone XAF)">
+                  <option value="CM">Cameroun</option>
+                  <option value="CF">Centrafrique</option>
+                  <option value="CG">Congo</option>
+                  <option value="GA">Gabon</option>
+                  <option value="GQ">Guinée équatoriale</option>
+                  <option value="TD">Tchad</option>
+                </optgroup>
+                <optgroup label="Autres — Afrique de l'Ouest">
+                  <option value="CV">Cabo Verde</option>
+                  <option value="GM">Gambie</option>
+                  <option value="GH">Ghana</option>
+                  <option value="GN">Guinée</option>
+                  <option value="LR">Liberia</option>
+                  <option value="MR">Mauritanie</option>
+                  <option value="NG">Nigeria</option>
+                  <option value="SL">Sierra Leone</option>
+                </optgroup>
+                <optgroup label="Autres — Afrique centrale">
+                  <option value="AO">Angola</option>
+                  <option value="BI">Burundi</option>
+                  <option value="CD">RD Congo</option>
+                  <option value="RW">Rwanda</option>
+                  <option value="ST">São Tomé-et-Príncipe</option>
+                </optgroup>
               </Select>
             </Field>
             <Field label="Ville / siège">
