@@ -1,24 +1,37 @@
 import { useState } from 'react';
-import { Receipt, Plus, Info, Settings2, FileCheck2 } from 'lucide-react';
+import { Receipt, Plus, Info, Settings2, FileCheck2, QrCode, RefreshCw, ShieldCheck } from 'lucide-react';
 import { useCoopQuery, useCoopMutation, supabase } from '../../hooks/data';
 import {
   PageHeader, Button, Card, CardHeader, CardBody, Stat, Badge, Money, Modal, Field, Input, Select,
-  Spinner, EmptyState, useToast, Table, THead, TBody, Th, Tr, Td,
+  Spinner, EmptyState, useToast, Table, THead, TBody, Th, Tr, Td, Tabs,
 } from '../../ui';
 import { formatBp } from '../../lib/rates';
 import { formatDate } from '../../lib/format';
 
+type Onglet = 'tva' | 'fne';
+
+interface FneFacture {
+  id: string; numero: string; client_nom: string | null; montant_ttc_xof: number;
+  statut: string; fne_reference: string | null; erreur: string | null; created_at: string;
+}
+
 export function FiscalitePage() {
   const { push } = useToast();
+  const [onglet, setOnglet] = useState<Onglet>('tva');
   const [paramOpen, setParamOpen] = useState(false);
   const [declOpen, setDeclOpen] = useState(false);
 
   const { data, isLoading, refetch } = useCoopQuery(['fiscalite'], async (coopId) => {
-    const [params, decls] = await Promise.all([
+    const [params, decls, fne] = await Promise.all([
       supabase.from('coop_parametres_fiscaux').select('*').eq('cooperative_id', coopId).maybeSingle(),
       supabase.from('coop_declarations_tva').select('*').eq('cooperative_id', coopId).order('date_debut', { ascending: false }),
+      supabase.from('coop_fne_factures').select('*').eq('cooperative_id', coopId).order('created_at', { ascending: false }).limit(100),
     ]);
-    return { params: params.data as Record<string, unknown> | null, decls: decls.data ?? [] };
+    return {
+      params: params.data as Record<string, unknown> | null,
+      decls: decls.data ?? [],
+      fne: (fne.data ?? []) as FneFacture[],
+    };
   });
 
   const params = data?.params;
@@ -29,27 +42,65 @@ export function FiscalitePage() {
     { invalidate: ['fiscalite'], onSuccess: () => push('success', 'Déclaration marquée payée') },
   );
 
+  const genererFne = useCoopMutation(
+    async (coopId) => {
+      const { data: n, error } = await supabase.rpc('coop_generer_fne_factures', { p_coop: coopId });
+      if (error) throw error;
+      return n as number;
+    },
+    { invalidate: ['fiscalite'], onSuccess: (n) => push('success', n > 0 ? `${n} facture(s) ajoutée(s) à la file` : 'Aucune nouvelle vente à certifier') },
+  );
+
+  const certifierFne = useCoopMutation(
+    async (coopId) => {
+      const { data: r, error } = await supabase.functions.invoke('coop-fne-certify', { body: { cooperative_id: coopId } });
+      if (error) throw error;
+      return r as { processed: number; certified: number; failed: number; mode: string };
+    },
+    {
+      invalidate: ['fiscalite'],
+      onSuccess: (r) => push('success', `Certification : ${r?.certified ?? 0}/${r?.processed ?? 0} factures (${r?.mode ?? 'simulé'})`),
+    },
+  );
+
+  const aCertifier = (data?.fne ?? []).filter((f) => f.statut === 'a_certifier').length;
+
   return (
     <>
       <PageHeader
         title="Fiscalité"
-        subtitle="Régime, TVA, déclarations. Ce module paramètre, il ne remplace pas le conseil fiscal."
+        subtitle="Régime, TVA, déclarations, facturation normalisée électronique (FNE). Ce module paramètre, il ne remplace pas le conseil fiscal."
         icon={<Receipt className="h-5 w-5" />}
-        actions={
+        actions={onglet === 'tva' ? (
           <>
             <Button variant="outline" onClick={() => setParamOpen(true)}><Settings2 className="h-4 w-4" /> Paramètres</Button>
             <Button variant="action" onClick={() => setDeclOpen(true)} disabled={!params?.assujetti_tva}><Plus className="h-4 w-4" /> Déclaration TVA</Button>
           </>
-        }
+        ) : (
+          <>
+            <Button variant="outline" loading={genererFne.isPending} onClick={() => genererFne.mutate(undefined)}><RefreshCw className="h-4 w-4" /> Générer les factures</Button>
+            <Button variant="action" loading={certifierFne.isPending} disabled={aCertifier === 0} onClick={() => certifierFne.mutate(undefined)}><ShieldCheck className="h-4 w-4" /> Certifier la file ({aCertifier})</Button>
+          </>
+        )}
       />
 
-      <div className="mb-4 flex items-start gap-2 rounded-xl border border-or-fcfa/25 bg-or-fcfa/5 p-3 text-sm text-texte-2">
-        <Info className="mt-0.5 h-4 w-4 shrink-0 text-or-fcfa" />
-        La fiscalité coopérative comporte des exonérations spécifiques et des régimes variables par pays et par activité. Ce module prépare vos déclarations ; validez avec votre conseil fiscal.
-      </div>
+      <Tabs<Onglet>
+        className="mb-4"
+        value={onglet}
+        onChange={setOnglet}
+        tabs={[
+          { key: 'tva', label: 'TVA' },
+          { key: 'fne', label: 'Factures FNE', count: data?.fne.length },
+        ]}
+      />
 
-      {isLoading ? <Spinner /> : (
+      {isLoading ? <Spinner /> : onglet === 'tva' ? (
         <>
+          <div className="mb-4 flex items-start gap-2 rounded-xl border border-or-fcfa/25 bg-or-fcfa/5 p-3 text-sm text-texte-2">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-or-fcfa" />
+            La fiscalité coopérative comporte des exonérations spécifiques et des régimes variables par pays et par activité. Ce module prépare vos déclarations ; validez avec votre conseil fiscal.
+          </div>
+
           <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Stat label="Assujetti TVA" value={params?.assujetti_tva ? 'Oui' : 'Non'} tone={params?.assujetti_tva ? 'action' : 'primaire'} icon={<Receipt className="h-4 w-4" />} hint={params ? `Régime ${(params.regime as string).replace('_', ' ')}` : 'Non paramétré'} />
             <Stat label="Taux TVA" value={params ? formatBp(params.taux_tva_bp as number, 0) : '—'} tone="primaire" icon={<Settings2 className="h-4 w-4" />} />
@@ -80,6 +131,43 @@ export function FiscalitePage() {
                         </Tr>
                       );
                     })}
+                  </TBody>
+                </Table>
+              </CardBody>
+            </Card>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="mb-4 flex items-start gap-2 rounded-xl border border-or-fcfa/25 bg-or-fcfa/5 p-3 text-sm text-texte-2">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-or-fcfa" />
+            Facture Normalisée Électronique (FNE — DGI Côte d'Ivoire). « Générer les factures » importe les ventes non encore certifiées ; « Certifier la file » appelle la passerelle FNE (simulée tant qu'aucune clé n'est configurée).
+          </div>
+
+          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <Stat label="Factures" value={data?.fne.length ?? 0} tone="primaire" icon={<QrCode className="h-4 w-4" />} />
+            <Stat label="À certifier" value={aCertifier} tone={aCertifier > 0 ? 'alerte' : 'primaire'} icon={<FileCheck2 className="h-4 w-4" />} />
+            <Stat label="Certifiées" value={(data?.fne ?? []).filter((f) => f.statut === 'certifie').length} tone="action" icon={<ShieldCheck className="h-4 w-4" />} />
+          </div>
+
+          {!data?.fne.length ? (
+            <EmptyState icon={<QrCode className="h-8 w-8" />} title="Aucune facture FNE" description="Générez les factures depuis les ventes de la coopérative." action={<Button variant="outline" loading={genererFne.isPending} onClick={() => genererFne.mutate(undefined)}><RefreshCw className="h-4 w-4" /> Générer les factures</Button>} />
+          ) : (
+            <Card>
+              <CardHeader title="Factures FNE" subtitle="Certification DGI par facture" />
+              <CardBody className="p-0">
+                <Table>
+                  <THead><Th>Numéro</Th><Th>Client</Th><Th align="right">Montant TTC</Th><Th>Statut</Th><Th>Référence DGI</Th></THead>
+                  <TBody>
+                    {data.fne.map((f) => (
+                      <Tr key={f.id}>
+                        <Td className="mono text-sm text-texte">{f.numero}</Td>
+                        <Td className="text-texte-2">{f.client_nom ?? '—'}</Td>
+                        <Td align="right"><Money value={f.montant_ttc_xof} size="sm" suffix={false} /></Td>
+                        <Td><Badge tone={f.statut === 'certifie' ? 'action' : f.statut === 'echec' ? 'alerte' : 'or'} dot>{f.statut.replace('_', ' ')}</Badge></Td>
+                        <Td className="mono text-xs text-texte-2">{f.fne_reference ?? f.erreur ?? '—'}</Td>
+                      </Tr>
+                    ))}
                   </TBody>
                 </Table>
               </CardBody>

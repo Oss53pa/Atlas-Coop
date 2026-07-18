@@ -2,7 +2,7 @@ import {
   LayoutDashboard, Users, Coins, Wallet, Landmark, BookText, Banknote,
   Scale, Fish, Beef, Sprout, ShoppingCart, Store, Factory, Boxes,
   Tractor, PiggyBank, Building2, Receipt, Bot, MessageSquare, Blocks,
-  Network, ScrollText, PieChart, HandCoins,
+  Network, ScrollText, PieChart, HandCoins, Smartphone,
   type LucideIcon,
 } from 'lucide-react';
 import type { CoopRole } from '../domain/database.types';
@@ -64,6 +64,7 @@ export const NAV: NavGroup[] = [
     title: 'Transversaux',
     items: [
       { to: '/canal-membre', label: 'Canal membre (SMS)', icon: MessageSquare, module: 'M16', phase: 1 },
+      { to: '/decaissements', label: 'Décaissements Mobile Money', icon: Smartphone, module: 'M16', phase: 3, roles: ['admin', 'gerant', 'comptable'] },
       { to: '/budgets', label: 'Budgets & subventions', icon: PiggyBank, module: 'M18', phase: 3 },
       { to: '/immobilisations', label: 'Immobilisations', icon: Building2, module: 'M19', phase: 3 },
       { to: '/fiscalite', label: 'Fiscalité', icon: Receipt, module: 'M17', phase: 3, roles: ['admin', 'gerant', 'comptable'] },

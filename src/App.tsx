@@ -41,6 +41,7 @@ const BudgetsPage = lz(() => import('./modules/budgets/BudgetsPage'), 'BudgetsPa
 const ReseauPage = lz(() => import('./modules/reseau/ReseauPage'), 'ReseauPage');
 const FiscalitePage = lz(() => import('./modules/fiscalite/FiscalitePage'), 'FiscalitePage');
 const RecouvrementPage = lz(() => import('./modules/recouvrement/RecouvrementPage'), 'RecouvrementPage');
+const DecaissementsPage = lz(() => import('./modules/decaissements/DecaissementsPage'), 'DecaissementsPage');
 
 function FullScreenLoader() {
   return (
@@ -87,6 +88,7 @@ export default function App() {
         <Route path="/recouvrement" element={<RecouvrementPage />} />
         <Route path="/comptabilite" element={<ComptabilitePage />} />
         <Route path="/canal-membre" element={<CanalMembrePage />} />
+        <Route path="/decaissements" element={<DecaissementsPage />} />
         <Route path="/campagnes" element={<CampagnesPage />} />
         <Route path="/ristournes" element={<RistournesPage />} />
 
