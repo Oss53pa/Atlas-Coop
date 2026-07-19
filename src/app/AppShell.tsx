@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, Suspense } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { ChevronDown, ChevronsLeft, ChevronsRight, LogOut, Menu, X, Check, Building2, Search } from 'lucide-react';
 import { NAV } from './navigation';
 import { useAuth } from '../auth/AuthProvider';
@@ -69,7 +69,7 @@ export function AppShell() {
         {/* Colonne 1 — Sections, toujours visible avec libellés */}
         <div className="flex w-56 shrink-0 flex-col border-r border-ligne bg-surface">
           <div className="flex h-16 items-center gap-2 border-b border-ligne px-5">
-            <span className="font-display text-2xl text-primaire">Atlas Coop</span>
+            <Link to="/" title="Retour au cockpit" className="font-display text-2xl text-primaire hover:text-primaire-hover">Atlas Coop</Link>
           </div>
           <div className="px-4 pb-1 pt-4 text-xs font-semibold uppercase tracking-wider text-texte-2">
             Sections
@@ -170,7 +170,7 @@ export function AppShell() {
           <div className="absolute inset-0 bg-primaire/40 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
           <aside className="absolute inset-y-0 left-0 flex w-72 flex-col border-r border-ligne bg-surface">
             <div className="flex h-16 items-center gap-2 border-b border-ligne px-5">
-              <span className="font-display text-2xl text-primaire">Atlas Coop</span>
+              <Link to="/" onClick={() => setMobileOpen(false)} className="font-display text-2xl text-primaire">Atlas Coop</Link>
             </div>
             <nav className="flex-1 overflow-y-auto px-3 py-4">
               {groups.map((g) => (

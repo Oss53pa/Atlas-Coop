@@ -57,6 +57,7 @@ function PublicApp() {
   return (
     <Routes>
       <Route path="/" element={<LandingPage onEnter={() => navigate('/connexion')} />} />
+      <Route path="/vitrine" element={<LandingPage onEnter={() => navigate('/connexion')} />} />
       <Route path="/connexion" element={<LoginPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
@@ -66,6 +67,7 @@ function PublicApp() {
 export default function App() {
   const { session, loading: authLoading } = useAuth();
   const { cooperatives, loading: coopLoading } = useCoop();
+  const navigate = useNavigate();
 
   if (authLoading) return <FullScreenLoader />;
   if (!session) return <PublicApp />;
@@ -76,6 +78,8 @@ export default function App() {
     <Routes>
       {/* Cockpit d'accueil — AVANT l'application, sans menu. C'est de là qu'on y entre. */}
       <Route path="/" element={<Dashboard />} />
+      {/* Vitrine publique, consultable même connecté (lien depuis le Cockpit). */}
+      <Route path="/vitrine" element={<LandingPage onEnter={() => navigate('/')} />} />
 
       <Route element={<AppShell />}>
         <Route path="/membres" element={<MembresPage />} />

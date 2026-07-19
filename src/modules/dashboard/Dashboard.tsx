@@ -58,7 +58,7 @@ export function Dashboard() {
     <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
       {/* ===== EN-TÊTE MINIMAL (pas de menu — écran d'accueil avant l'application) ===== */}
       <div className="flex items-center justify-between">
-        <span className="font-display text-2xl text-primaire">Atlas Coop</span>
+        <Link to="/vitrine" title="Voir la vitrine Atlas Coop" className="font-display text-2xl text-primaire hover:text-primaire-hover">Atlas Coop</Link>
         <button
           onClick={signOut}
           className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium text-texte-2 hover:bg-surface-2 hover:text-texte"
