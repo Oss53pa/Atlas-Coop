@@ -1,6 +1,6 @@
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useMemo, useRef, useState, Suspense } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { ChevronDown, ChevronsLeft, ChevronsRight, LogOut, Menu, X, Check, Building2 } from 'lucide-react';
+import { ChevronDown, ChevronsLeft, ChevronsRight, LogOut, Menu, X, Check, Building2, Search } from 'lucide-react';
 import { NAV } from './navigation';
 import { useAuth } from '../auth/AuthProvider';
 import { useCoop } from '../auth/CooperativeProvider';
@@ -19,6 +19,8 @@ function groupForPath(pathname: string): string | undefined {
 export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(() => localStorage.getItem(PANEL_PREF_KEY) !== 'ferme');
+  const [query, setQuery] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
   const location = useLocation();
   const { hasRole } = useCoop();
   const [selectedGroup, setSelectedGroup] = useState(() => groupForPath(location.pathname) ?? NAV[0]?.title);
@@ -27,6 +29,20 @@ export function AppShell() {
     const g = groupForPath(location.pathname);
     if (g) setSelectedGroup(g);
   }, [location.pathname]);
+
+  useEffect(() => setQuery(''), [selectedGroup]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPanelOpen(true);
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const togglePanel = () => {
     setPanelOpen((v) => {
@@ -39,78 +55,110 @@ export function AppShell() {
   const groups = NAV.map((g) => ({ ...g, items: g.items.filter((it) => !it.roles || hasRole(...it.roles)) }))
     .filter((g) => g.items.length > 0);
   const activeGroup = groups.find((g) => g.title === selectedGroup) ?? groups[0];
+  const filteredItems = useMemo(() => {
+    const items = activeGroup?.items ?? [];
+    if (!query.trim()) return items;
+    const q = query.trim().toLowerCase();
+    return items.filter((it) => it.label.toLowerCase().includes(q));
+  }, [activeGroup, query]);
 
   return (
     <div className="flex min-h-screen bg-fond">
-      {/* Sidebar desktop — rail d'icônes + panneau rétractable */}
-      <aside
-        className={cn(
-          'fixed inset-y-0 left-0 z-20 hidden lg:flex',
-          panelOpen ? 'w-[19rem]' : 'w-16',
-        )}
-      >
-        {/* Rail — toujours visible, un icône par groupe */}
-        <div className="flex w-16 shrink-0 flex-col items-center gap-1 border-r border-ligne bg-surface py-4">
-          <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-primaire/10 font-display text-xl text-primaire">
-            A
+      {/* Sidebar desktop — colonne Sections (fixe) + colonne Items du groupe actif (rétractable) */}
+      <aside className="fixed inset-y-0 left-0 z-20 hidden lg:flex">
+        {/* Colonne 1 — Sections, toujours visible avec libellés */}
+        <div className="flex w-56 shrink-0 flex-col border-r border-ligne bg-surface">
+          <div className="flex h-16 items-center gap-2 border-b border-ligne px-5">
+            <span className="font-display text-2xl text-primaire">Atlas Coop</span>
           </div>
-          {groups.map((g) => (
+          <div className="px-4 pb-1 pt-4 text-xs font-semibold uppercase tracking-wider text-texte-2">
+            Sections
+          </div>
+          <nav className="flex-1 overflow-y-auto px-3 pb-4">
+            {groups.map((g) => (
+              <button
+                key={g.title}
+                onClick={() => { setSelectedGroup(g.title); if (!panelOpen) togglePanel(); }}
+                className={cn(
+                  'flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-sm font-medium transition-colors',
+                  activeGroup?.title === g.title
+                    ? 'bg-primaire/10 text-primaire'
+                    : 'text-texte-2 hover:bg-surface-2 hover:text-texte',
+                )}
+              >
+                <g.icon className="h-[18px] w-[18px] shrink-0" />
+                <span className="flex-1 truncate">{g.title}</span>
+              </button>
+            ))}
+          </nav>
+          {!panelOpen && (
             <button
-              key={g.title}
-              onClick={() => { setSelectedGroup(g.title); if (!panelOpen) togglePanel(); }}
-              title={g.title}
-              className={cn(
-                'flex h-10 w-10 items-center justify-center rounded-xl transition-colors',
-                activeGroup?.title === g.title
-                  ? 'bg-primaire/10 text-primaire'
-                  : 'text-texte-2 hover:bg-surface-2 hover:text-texte',
-              )}
+              onClick={togglePanel}
+              className="flex items-center gap-2 border-t border-ligne px-5 py-3 text-xs font-medium text-texte-2 hover:bg-surface-2 hover:text-texte"
             >
-              <g.icon className="h-5 w-5" />
+              <ChevronsRight className="h-3.5 w-3.5" /> Étendre le sous-menu
             </button>
-          ))}
-          <div className="flex-1" />
-          <button
-            onClick={togglePanel}
-            title={panelOpen ? 'Réduire le menu' : 'Étendre le menu'}
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-texte-2 hover:bg-surface-2 hover:text-texte"
-          >
-            {panelOpen ? <ChevronsLeft className="h-4 w-4" /> : <ChevronsRight className="h-4 w-4" />}
-          </button>
+          )}
         </div>
 
-        {/* Panneau — items du groupe sélectionné, masquable */}
+        {/* Colonne 2 — Items du groupe sélectionné, avec recherche, rétractable */}
         {panelOpen && (
-          <div className="flex w-[15rem] shrink-0 flex-col border-r border-ligne bg-surface">
-            <div className="flex h-16 items-center gap-2 border-b border-ligne px-5">
-              <span className="font-display text-2xl text-primaire">Atlas Coop</span>
-            </div>
-            <nav className="flex-1 overflow-y-auto px-3 py-4">
-              <div className="mb-1.5 px-2 text-xs font-semibold uppercase tracking-wider text-texte-2">
-                {activeGroup?.title}
+          <div className="flex w-64 shrink-0 flex-col border-r border-ligne bg-surface-2/60">
+            <div className="flex h-16 items-center justify-between gap-2 border-b border-ligne px-4">
+              <div className="flex items-center gap-2 text-sm font-bold text-texte">
+                {activeGroup && <activeGroup.icon className="h-4 w-4 text-primaire" />}
+                <span className="truncate">{activeGroup?.title}</span>
               </div>
-              {activeGroup?.items.map((it) => (
-                <NavLink
-                  key={it.to}
-                  to={it.to}
-                  className={({ isActive }) =>
-                    cn(
-                      'group flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors',
-                      isActive
-                        ? 'bg-primaire/10 text-primaire'
-                        : 'text-texte-2 hover:bg-surface-2 hover:text-texte',
-                    )
-                  }
-                >
-                  <it.icon className="h-[18px] w-[18px] shrink-0" />
-                  <span className="flex-1 truncate">{it.label}</span>
-                  {it.phase && it.phase > 1 && (
-                    <span className="rounded bg-desactive-fond px-1 text-[10px] text-texte-2">
-                      P{it.phase}
-                    </span>
-                  )}
-                </NavLink>
-              ))}
+              <button
+                onClick={togglePanel}
+                title="Réduire le sous-menu"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-texte-2 hover:bg-surface hover:text-texte"
+              >
+                <ChevronsLeft className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="px-3 pt-3">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-texte-2" />
+                <input
+                  ref={searchRef}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Rechercher…"
+                  className="w-full rounded-lg border border-ligne bg-surface py-1.5 pl-8 pr-10 text-sm text-texte placeholder:text-texte-2 focus:border-primaire focus:outline-none"
+                />
+                <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border border-ligne bg-surface-2 px-1 text-[10px] text-texte-2">
+                  ⌘K
+                </kbd>
+              </div>
+            </div>
+            <nav className="flex-1 overflow-y-auto px-3 py-3">
+              {filteredItems.length === 0 ? (
+                <p className="px-2.5 py-2 text-sm text-texte-2">Aucun résultat.</p>
+              ) : (
+                filteredItems.map((it) => (
+                  <NavLink
+                    key={it.to}
+                    to={it.to}
+                    className={({ isActive }) =>
+                      cn(
+                        'group flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors',
+                        isActive
+                          ? 'bg-primaire/10 text-primaire'
+                          : 'text-texte-2 hover:bg-surface hover:text-texte',
+                      )
+                    }
+                  >
+                    <it.icon className="h-[18px] w-[18px] shrink-0" />
+                    <span className="flex-1 truncate">{it.label}</span>
+                    {it.phase && it.phase > 1 && (
+                      <span className="rounded bg-desactive-fond px-1 text-[10px] text-texte-2">
+                        P{it.phase}
+                      </span>
+                    )}
+                  </NavLink>
+                ))
+              )}
             </nav>
           </div>
         )}
@@ -160,7 +208,7 @@ export function AppShell() {
         </div>
       )}
 
-      <div className={cn('flex flex-1 flex-col transition-[padding] duration-150', panelOpen ? 'lg:pl-[19rem]' : 'lg:pl-16')}>
+      <div className={cn('flex flex-1 flex-col transition-[padding] duration-150', panelOpen ? 'lg:pl-[30rem]' : 'lg:pl-56')}>
         <Topbar onMenu={() => setMobileOpen((v) => !v)} mobileOpen={mobileOpen} />
         <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
           <div key={location.pathname} className="mx-auto max-w-7xl animate-fade-in">
